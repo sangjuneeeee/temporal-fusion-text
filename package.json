@@ -1,6 +1,6 @@
 {
 	"name": "temporal-fusion-text",
-	"version": "1.0.6",
+	"version": "1.0.7",
 	"license": "MIT",
 	"description": "Human-decodable text via temporal frame fusion, screenshot-safe.",
 	"main": "dist/index.cjs.js",
