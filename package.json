@@ -11,6 +11,7 @@
 		"LICENSE"
 	],
 	"scripts": {
+		"lint": "eslint src --ext .ts",
 		"build": "rollup -c",
 		"prepare": "npm run build",
 		"prepublishOnly": "npm test && npm run build",
@@ -39,6 +40,9 @@
 		"@rollup/plugin-commonjs": "^24.1.0",
 		"@rollup/plugin-node-resolve": "^15.3.1",
 		"@rollup/plugin-terser": "^0.4.4",
+		"@typescript-eslint/eslint-plugin": "^8.32.0",
+		"@typescript-eslint/parser": "^8.32.0",
+		"eslint": "^9.26.0",
 		"rollup": "^3.29.5",
 		"rollup-plugin-typescript2": "^0.36.0",
 		"typescript": "^5.8.3"
