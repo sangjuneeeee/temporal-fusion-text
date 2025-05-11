@@ -77,7 +77,7 @@ export class TemporalFusionText {
 	private static async detectRefresh(): Promise<number> {
 		const t0 = performance.now();
 		await new Promise(requestAnimationFrame);
-		const t1 = performance.now();
+		// const t1 = performance.now();
 		await new Promise(requestAnimationFrame);
 		const t2 = performance.now();
 		// average of two frame intervals
