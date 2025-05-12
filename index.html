@@ -2,7 +2,7 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<title>Temporal-Fusion Secure Display • Long-line Demo</title>
+		<title>Temporal-Fusion Secure Display Demo</title>
 		<meta name="viewport" content="width=device-width,initial-scale=1" />
 		<style>
 			html,
@@ -13,22 +13,22 @@
 				justify-content: center;
 				align-items: center;
 				background: #0d0d0d;
-				font-family: system-ui, "Segoe UI", sans-serif;
 				color: #fafafa;
+				font-family: system-ui, "Segoe UI", sans-serif;
 			}
 			canvas {
 				background: transparent;
 			}
 			#warn {
 				position: fixed;
+				bottom: 10px;
 				left: 50%;
-				bottom: 8px;
 				transform: translateX(-50%);
 				display: none;
 				background: #e63946;
-				padding: 6px 14px;
-				border-radius: 8px;
-				font-size: 14px;
+				color: #fff;
+				padding: 4px 8px;
+				border-radius: 4px;
 			}
 		</style>
 	</head>
@@ -36,153 +36,19 @@
 		<canvas id="view" width="1000" height="260" aria-label="Temporal-fusion text"></canvas>
 		<div id="warn">⚠️ Protection disabled: low refresh-rate environment</div>
 
-		<script>
-			/**
-			 * TemporalFusionText — human-decodable, frame-scrambled text renderer.
-			 *
-			 *   • Each single frame discloses no meaningful glyph pattern.
-			 *   • Consecutive frames integrate in the human visual system (persistence of vision).
-			 *   • Off-screen double buffering for constant-time per-frame draw.
-			 *
-			 * MIT License — 2025 @your-name
-			 */
-			class TemporalFusionText {
-				/**
-				 * @param {HTMLCanvasElement} canvas  The destination canvas element.
-				 * @param {string} text               Message content (supports \n line breaks).
-				 * @param {object} [opts]             Rendering options.
-				 */
-				constructor(canvas, text, opts = {}) {
-					this.canvas = canvas;
-					this.ctx = canvas.getContext("2d");
-					this.text = text;
-					this.opts = Object.assign(
-						{
-							font: '32px "Segoe UI", sans-serif',
-							color: "#808080",
-							opacity: 0.7,
-							minSafeHz: 120,
-							marginX: 40,
-							marginY: 36,
-							lineHeight: 48,
-						},
-						opts
-					);
+		<script type="module">
+			import TemporalFusionText from "https://unpkg.com/temporal-fusion-text@1.0.6/dist/index.esm.js";
 
-					this.parity = 0; // 0 or 1 — which glyph set to show
-					this.lastSwap = 0; // timestamp of last parity flip
-					this.swapInterval = 0; // ms between flips (set in run())
-
-					// Build off-screen buffers
-					this.offA = this.#makeOffscreen();
-					this.offB = this.#makeOffscreen();
-					this.charInfo = this.#layoutChars();
-					this.#renderBuffers();
-				}
-
-				/* -------- static helpers -------- */
-				/** Estimate monitor refresh rate (≈2 requestAnimationFrame samples). */
-				static async detectRefresh() {
-					const t0 = performance.now();
-					await new Promise(requestAnimationFrame);
-					const t1 = performance.now();
-					await new Promise(requestAnimationFrame);
-					const t2 = performance.now();
-					return Math.round(1000 / ((t2 - t0) / 2));
-				}
-
-				/* -------- private methods -------- */
-				#makeOffscreen() {
-					const off = document.createElement("canvas");
-					off.width = this.canvas.width;
-					off.height = this.canvas.height;
-					return off.getContext("2d");
-				}
-
-				/** Compute (x,y) layout for each glyph with word-wrap. */
-				#layoutChars() {
-					const { font, marginX, marginY, lineHeight } = this.opts;
-					const info = [];
-					let x = marginX,
-						y = marginY;
-					const maxX = this.canvas.width - marginX;
-					this.ctx.font = font;
-					for (const ch of this.text) {
-						if (ch === "\n") {
-							x = marginX;
-							y += lineHeight;
-							continue;
-						}
-						const w = this.ctx.measureText(ch).width;
-						if (x + w > maxX) {
-							x = marginX;
-							y += lineHeight;
-						}
-						info.push({ ch, x, y });
-						x += w + 2; // glyph spacing
-					}
-					return info;
-				}
-
-				/** Render even / odd glyph sets to off-screen canvases once. */
-				#renderBuffers() {
-					const { font, color, opacity } = this.opts;
-					[this.offA, this.offB].forEach((off) => {
-						off.clearRect(0, 0, off.canvas.width, off.canvas.height);
-						off.font = font;
-						off.textBaseline = "top";
-						off.fillStyle = color;
-						off.globalAlpha = opacity;
-					});
-					this.charInfo.forEach(({ ch, x, y }, i) => {
-						const ctx = i % 2 === 0 ? this.offA : this.offB;
-						ctx.fillText(ch, x, y);
-					});
-				}
-
-				/* -------- public API -------- */
-				/** Initialise protection mode (returns true if enabled). */
-				async run() {
-					const refresh = await TemporalFusionText.detectRefresh();
-					this.safeHz = refresh * 2; // parity toggle freq = 2× monitor Hz
-					if (this.safeHz < this.opts.minSafeHz) {
-						document.getElementById("warn").style.display = "block";
-						this.#renderStatic();
-						return false;
-					}
-					this.swapInterval = 1000 / this.safeHz;
-					requestAnimationFrame(this.#loop.bind(this));
-					return true;
-				}
-
-				/* -------- drawing helpers -------- */
-				#renderStatic() {
-					const { font } = this.opts;
-					this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-					this.ctx.font = font;
-					this.ctx.textBaseline = "top";
-					this.ctx.fillStyle = "#ffffff";
-					this.charInfo.forEach(({ ch, x, y }) => this.ctx.fillText(ch, x, y));
-				}
-
-				#loop(now) {
-					if (now - this.lastSwap >= this.swapInterval) {
-						this.parity ^= 1;
-						this.lastSwap = now;
-					}
-					this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-					this.ctx.drawImage(this.parity ? this.offB.canvas : this.offA.canvas, 0, 0);
-					requestAnimationFrame(this.#loop.bind(this));
-				}
-			}
-
-			/* -------- Demo Bootstrapping -------- */
-			(async () => {
-				const sampleText =
+			(async function () {
+				const text =
 					`Temporal-fusion display prevents static screenshots from disclosing any meaningful information.\n` +
 					`Only when consecutive frames are integrated by human vision does the sentence appear.`;
-				const fusion = new TemporalFusionText(document.getElementById("view"), sampleText, {
+				const canvas = document.getElementById("view");
+				const fusion = new TemporalFusionText(canvas, text, {
 					font: '30px "Segoe UI", sans-serif',
+					color: "#808080",
+					opacity: 0.7,
+					minSafeHz: 120,
 				});
 				await fusion.run();
 			})();
