@@ -1,53 +1,32 @@
 /**
- * @module temporal-fusion-text
- * @description
- * A browser-native TypeScript library for rendering text that is only
- * human-readable when frames are temporally integrated, but
- * indecipherable in any single screenshot or static frame.
+ * Temporal-Fusion Text Display Library
  *
- * @license MIT © 2025 sangjuneeeee
+ * This library renders text that is only human-readable when frames
+ * are temporally integrated, but indecipherable in any single frame or screenshot.
+ *
+ * MIT License © 2025 sangjuneeeee
  */
 
-///////////////////////
-// Public Interfaces //
-///////////////////////
-
-/**
- * Configuration options for temporal-fusion rendering.
- */
 export interface FusionOptions {
-	/** CSS font string, e.g. `"32px sans-serif"`. Default: `32px "Segoe UI", sans-serif`. */
+	/** CSS font string, e.g. "32px sans-serif". Default: 32px "Segoe UI", sans-serif */
 	font?: string;
-	/** fillStyle for glyphs. Default: `"#808080"`. */
+	/** fillStyle for glyphs. Default: "#808080" */
 	color?: string;
-	/** globalAlpha for glyphs (0.0–1.0). Default: `0.55`. */
+	/** globalAlpha for glyphs (0.0–1.0). Default: 0.55 */
 	opacity?: number;
-	/**
-	 * Minimum `refreshRate * 2` to enable fusion.
-	 * If device runs slower or user prefers reduced motion,
-	 * library falls back to a single static render.
-	 * Default: `120`.
-	 */
+	/** Minimum refreshRate*2 to enable fusion. Fallback to static below. Default: 120 */
 	minSafeHz?: number;
-	/** horizontal padding (px). Default: `40`. */
+	/** horizontal padding (px). Default: 40 */
 	marginX?: number;
-	/** vertical padding (px). Default: `36`. */
+	/** vertical padding (px). Default: 36 */
 	marginY?: number;
-	/** line spacing (px). Default: `48`. */
+	/** line spacing (px). Default: 48 */
 	lineHeight?: number;
 }
 
-/**
- * Result of rendering: an array of booleans indicating
- * whether temporal-fusion mode was active per paragraph.
- */
-export type FusionResults = boolean[];
+/** Internal fully-resolved options */
+type InternalOptions = Required<FusionOptions>;
 
-//////////////////////////
-// Internal Declarations //
-//////////////////////////
-
-interface InternalOptions extends Required<FusionOptions> {}
 const DEFAULT_OPTIONS: InternalOptions = {
 	font: '32px "Segoe UI", sans-serif',
 	color: "#808080",
@@ -58,25 +37,14 @@ const DEFAULT_OPTIONS: InternalOptions = {
 	lineHeight: 48,
 };
 
-////////////////////////
-// Core Class & API  //
-////////////////////////
-
 /**
- * TemporalFusionText
- *
- * Low-level class that renders a single paragraph of text
- * into the given canvas element using temporal frame-fusion.
- *
- * You normally do not need to instantiate this directly;
- * see `renderTemporalFusionParagraphs` for multi-paragraph support.
+ * Core renderer: renders a single paragraph on a given canvas
  */
 export class TemporalFusionText {
 	private canvas: HTMLCanvasElement;
 	private ctx: CanvasRenderingContext2D;
 	private opts: InternalOptions;
 	private charLayout: Array<{ ch: string; x: number; y: number }>;
-
 	private offA: CanvasRenderingContext2D;
 	private offB: CanvasRenderingContext2D;
 	private parity: 0 | 1 = 0;
@@ -84,24 +52,27 @@ export class TemporalFusionText {
 	private swapInterval = 0;
 
 	/**
-	 * @param canvas Target canvas element (sized to fit text).
-	 * @param text   Single paragraph text (supports `\n` for explicit line breaks).
-	 * @param opts   Partial options to override defaults.
+	 * @param canvas Target canvas element
+	 * @param text   Paragraph text (supports "\n")
+	 * @param opts   Partial options override
 	 */
 	constructor(canvas: HTMLCanvasElement, text: string, opts: FusionOptions = {}) {
 		const ctx = canvas.getContext("2d");
-		if (!ctx) throw new Error("Cannot acquire 2D context");
+		if (!ctx) throw new Error("Cannot get 2D context");
 		this.canvas = canvas;
 		this.ctx = ctx;
 		this.opts = { ...DEFAULT_OPTIONS, ...opts };
-		// layout & buffers
+
+		// layout characters
 		this.charLayout = TemporalFusionText.computeLayout(text, canvas.width, this.opts);
+
+		// prepare offscreen buffers
 		this.offA = this.createOffscreen();
 		this.offB = this.createOffscreen();
 		this.renderBuffers();
 	}
 
-	/** Estimate monitor refresh by averaging two RAF intervals. */
+	/** Estimate monitor refresh from two RAF intervals */
 	private static async detectRefresh(): Promise<number> {
 		const t0 = performance.now();
 		await new Promise(requestAnimationFrame);
@@ -110,20 +81,21 @@ export class TemporalFusionText {
 		return Math.round(1000 / ((t2 - t0) / 2));
 	}
 
-	/** Precompute x/y for each glyph, wrapping at right margin. */
+	/** Precompute glyph positions with auto-wrap */
 	public static computeLayout(
 		text: string,
 		width: number,
 		opts: InternalOptions
 	): Array<{ ch: string; x: number; y: number }> {
 		const { font, marginX, marginY, lineHeight } = opts;
-		const ctx = document.createElement("canvas").getContext("2d")!;
-		ctx.font = font;
-		ctx.textBaseline = "top";
+		// use offscreen context to measure
+		const measureCtx = document.createElement("canvas").getContext("2d")!;
+		measureCtx.font = font;
+		measureCtx.textBaseline = "top";
 
 		const layout: Array<{ ch: string; x: number; y: number }> = [];
-		let x = marginX,
-			y = marginY;
+		let x = marginX;
+		let y = marginY;
 		const maxX = width - marginX;
 
 		for (const ch of text) {
@@ -132,7 +104,7 @@ export class TemporalFusionText {
 				y += lineHeight;
 				continue;
 			}
-			const w = ctx.measureText(ch).width;
+			const w = measureCtx.measureText(ch).width;
 			if (x + w > maxX) {
 				x = marginX;
 				y += lineHeight;
@@ -143,7 +115,7 @@ export class TemporalFusionText {
 		return layout;
 	}
 
-	/** Create an off-screen canvas 2D context matching main canvas. */
+	/** Create matching offscreen 2D context */
 	private createOffscreen(): CanvasRenderingContext2D {
 		const off = document.createElement("canvas");
 		off.width = this.canvas.width;
@@ -153,23 +125,23 @@ export class TemporalFusionText {
 		return ctx;
 	}
 
-	/** Draw even/odd glyph sets into off-screen contexts once. */
+	/** Draw even/odd glyphs once into offscreen buffers */
 	private renderBuffers(): void {
 		const { font, color, opacity } = this.opts;
-		for (const ctx of [this.offA, this.offB]) {
-			ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-			ctx.font = font;
-			ctx.textBaseline = "top";
-			ctx.fillStyle = color;
-			ctx.globalAlpha = opacity;
-		}
+		[this.offA, this.offB].forEach((c) => {
+			c.clearRect(0, 0, c.canvas.width, c.canvas.height);
+			c.font = font;
+			c.textBaseline = "top";
+			c.fillStyle = color;
+			c.globalAlpha = opacity;
+		});
 		this.charLayout.forEach(({ ch, x, y }, i) => {
-			const target = i % 2 === 0 ? this.offA : this.offB;
-			target.fillText(ch, x, y);
+			const ctx = i % 2 === 0 ? this.offA : this.offB;
+			ctx.fillText(ch, x, y);
 		});
 	}
 
-	/** Paint static text (fallback for low refresh or reduced motion). */
+	/** Paint fallback static text */
 	private renderStatic(): void {
 		const { font } = this.opts;
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -181,7 +153,7 @@ export class TemporalFusionText {
 		});
 	}
 
-	/** The RAF loop that toggles parity and blits the appropriate buffer. */
+	/** RAF loop toggling buffers */
 	private loop = (now: number): void => {
 		if (now - this.lastSwap >= this.swapInterval) {
 			this.parity ^= 1;
@@ -193,10 +165,7 @@ export class TemporalFusionText {
 		requestAnimationFrame(this.loop);
 	};
 
-	/**
-	 * Begin rendering. Returns `true` if temporal fusion is active,
-	 * or `false` if static fallback was used.
-	 */
+	/** Start rendering; returns true if fusion mode, false if fallback */
 	public async run(): Promise<boolean> {
 		const refresh = await TemporalFusionText.detectRefresh();
 		const safeHz = refresh * 2;
@@ -214,34 +183,31 @@ export class TemporalFusionText {
 }
 
 /**
- * Render multiple paragraphs into a container element.
- * For each paragraph, a canvas is created and appended,
- * sized automatically to fit content, and protected by
- * temporal fusion. Returns array of booleans per paragraph.
- *
- * @param container  DOM element that will host canvases.
- * @param paragraphs Array of paragraph strings.
- * @param opts       FusionOptions & `{ width?: number }`; width defaults to `container.clientWidth`.
- * @returns          Promise resolving to an array indicating fusion-enabled per paragraph.
+ * Render multiple paragraphs in a container.
+ * Each paragraph gets its own canvas sized to fit content.
  */
 export async function renderTemporalFusionParagraphs(
+	// eslint-disable-next-line no-undef
 	container: HTMLElement,
 	paragraphs: string[],
 	opts: FusionOptions & { width?: number } = {}
-): Promise<FusionResults> {
+): Promise<boolean[]> {
 	const results: boolean[] = [];
 	const width = opts.width ?? container.clientWidth;
 
 	for (const text of paragraphs) {
-		// compute required height
-		const layout = TemporalFusionText.computeLayout(text, width, { ...DEFAULT_OPTIONS, ...opts });
+		// compute layout height
+		const layout = TemporalFusionText.computeLayout(text, width, {
+			...DEFAULT_OPTIONS,
+			...opts,
+		});
 		const maxY = Math.max(...layout.map((c) => c.y));
 		const height =
 			maxY +
 			(opts.lineHeight ?? DEFAULT_OPTIONS.lineHeight) +
 			(opts.marginY ?? DEFAULT_OPTIONS.marginY);
 
-		// create and size canvas
+		// setup canvas
 		const canvas = document.createElement("canvas");
 		canvas.width = width;
 		canvas.height = height;
