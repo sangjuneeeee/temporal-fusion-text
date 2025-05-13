@@ -9,8 +9,8 @@
 			body {
 				margin: 0;
 				padding: 0;
-				width: 100%;
 				height: 100%;
+				width: 100%;
 				background: #111;
 				color: #eee;
 				font-family: system-ui, "Segoe UI", sans-serif;
@@ -28,47 +28,62 @@
 			}
 			#warning {
 				margin-top: 16px;
-				color: #ff5555;
+				color: #f55;
 				font-size: 14px;
 				display: none;
 			}
 		</style>
 	</head>
 	<body>
+		<!-- Paragraph container -->
 		<div id="tf-container" aria-label="Temporal-fusion paragraphs"></div>
-		<div id="warning">⚠️ Some paragraphs rendered statically (low-refresh or reduced-motion).</div>
+		<div id="warning">⚠️ One or more paragraphs fell back to static mode.</div>
 
 		<script type="module">
-			import TemporalFusionText from "https://unpkg.com/temporal-fusion-text@latest/dist/index.esm.js";
+			import renderTemporalFusionParagraphs from "https://unpkg.com/temporal-fusion-text@latest/dist/index.esm.js";
 
-			(async () => {
-				// 1) Define your paragraphs:
-				const paragraphs = [
-					"Confidential — Question 1:\nDescribe the algorithm in your own words.",
-					"Confidential — Question 2:\nPropose an improvement and justify it.",
-				];
-
-				// 2) Grab container & warning elements:
+			window.addEventListener("load", async () => {
 				const container = document.getElementById("tf-container");
 				const warning = document.getElementById("warning");
+				if (!container || !warning) {
+					console.error("Missing required elements");
+					return;
+				}
 
-				// 3) Call the helper to render each paragraph into its own canvas.
-				const results = await renderTemporalFusionParagraphs(container, paragraphs, {
-					font: '28px "Segoe UI", sans-serif',
-					color: "#888",
-					opacity: 0.6,
-					minSafeHz: 120,
-					marginX: 20,
-					marginY: 20,
-					lineHeight: 36,
-					width: container.clientWidth,
-				});
+				// 1) Define your paragraphs
+				const paragraphs = [
+					"Capturing the temporal fusion of text and graphics is a complex task that requires careful consideration of various factors.",
+					"Hi there! This is a test of the Temporal-Fusion Text rendering engine.",
+					"My name is SangJun Park, and I am a software engineer with a passion for creating innovative solutions.",
+				];
 
-				// 4) If any paragraph fell back to static mode, show the warning:
-				if (results.includes(false)) {
+				// 2) Compute a non-zero width (fallback to 800px if zero)
+				let width = container.clientWidth;
+				if (!width || width < 100) width = 800;
+
+				// 3) Wrap the call in try/catch to diagnose errors
+				try {
+					const results = await renderTemporalFusionParagraphs(container, paragraphs, {
+						font: '28px "Segoe UI", sans-serif',
+						color: "#888",
+						opacity: 0.6,
+						minSafeHz: 120,
+						marginX: 20,
+						marginY: 20,
+						lineHeight: 36,
+						width, // pass our safe width
+					});
+
+					// 4) If any rendered statically, show the warning
+					if (results.includes(false)) {
+						warning.style.display = "block";
+					}
+				} catch (err) {
+					console.error("Temporal-Fusion rendering failed:", err);
+					warning.textContent = "⚠️ Rendering error – see console for details.";
 					warning.style.display = "block";
 				}
-			})();
+			});
 		</script>
 	</body>
 </html>
